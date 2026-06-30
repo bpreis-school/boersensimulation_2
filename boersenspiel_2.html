@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Börsenspiel – Portfolioallokation</title>
+<style>
+:root {
+  --bg:#f8f6f0; --panel:#fff; --ink:#1a1f1a; --soft:#5a6057; --line:#e0d9cc;
+  --accent:#1d6f56; --accent-bg:#e3f5ee; --up:#2d6b0e; --down:#9b2828;
+  --warn:#7a4800; --mono:'JetBrains Mono','Courier New',monospace;
+  --serif:Georgia,serif; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+.app{max-width:1100px;margin:0 auto;padding:14px 14px 80px}
+header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:16px}
+header h1{font-family:var(--serif);font-size:20px;font-weight:700;margin:0}
+header .sub{font-size:12px;color:var(--soft);font-family:var(--mono)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.panel h2{font-family:var(--serif);font-size:15px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.hidden{display:none!important}
+
+/* ── Setup ── */
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.setup-grid{grid-template-columns:1fr}}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.field input,.field select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff;font-family:var(--sans);appearance:none;-webkit-appearance:none}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);min-height:48px;touch-action:manipulation}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.sm{padding:8px 14px;font-size:13px;min-height:40px}
+.btn.danger{border-color:var(--down);color:var(--down);background:transparent}
+.err{color:var(--down);font-size:13px;margin-top:8px}
+
+/* ── Weight inputs ── */
+.weight-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+@media(max-width:600px){.weight-row{grid-template-columns:repeat(3,1fr)}}
+.w-cell{text-align:center}
+.w-cell label{font-size:11px;font-weight:700;display:block;margin-bottom:4px;color:var(--soft)}
+.w-cell input{width:100%;padding:10px 4px;border:1px solid var(--line);border-radius:8px;font-size:16px;text-align:center;background:#fff;font-family:var(--mono)}
+.w-cell input:focus{border-color:var(--accent);outline:none}
+.weight-hint{font-size:12px;color:var(--soft);margin-bottom:10px}
+.sum-display{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--soft)}
+
+/* ── Phase badge ── */
+.phase-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.4px}
+.phase-hist{background:#f0e8cc;color:#7a4800}
+.phase-sim{background:var(--accent-bg);color:var(--accent)}
+
+/* ── Charts ── */
+.chart-tabs{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;margin-bottom:12px}
+.ctab{padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;border:none;color:var(--soft);min-height:44px;touch-action:manipulation}
+.ctab.active{background:var(--ink);color:#fff}
+.chart-wrap{position:relative;height:280px}
+@media(max-width:600px){.chart-wrap{height:200px}}
+.legend-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:12px}
+.legend-item{display:flex;align-items:center;gap:5px;cursor:pointer}
+.legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* ── Stock table ── */
+.stocks-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media(max-width:700px){.stocks-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:450px){.stocks-grid{grid-template-columns:repeat(2,1fr)}}
+.stock-card{background:#f6f3eb;border-radius:10px;padding:12px;border:2px solid transparent;cursor:pointer;transition:border-color .15s}
+.stock-card.selected{border-color:var(--accent)}
+.stock-card .sname{font-weight:700;font-size:14px;margin-bottom:2px}
+.stock-card .sprice{font-family:var(--mono);font-size:16px;font-weight:700}
+.stock-card .schange{font-size:12px;font-family:var(--mono)}
+.stock-card .sdesc{font-size:11px;color:var(--soft);margin-top:4px;line-height:1.3}
+.up{color:var(--up)} .down{color:var(--down)}
+
+/* ── Trade panel ── */
+.trade-area{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+@media(max-width:600px){.trade-area{grid-template-columns:1fr}}
+.trade-box{background:#f6f3eb;border-radius:10px;padding:14px}
+.trade-box h3{font-size:13px;font-weight:700;margin:0 0 10px}
+.qty-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.qty-row input{flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px;text-align:center;font-family:var(--mono);background:#fff}
+.trade-preview{font-size:13px;margin-bottom:10px;font-family:var(--mono);color:var(--soft)}
+.trade-msg{font-size:12px;border-radius:6px;padding:8px 10px;margin-top:6px}
+.trade-msg.ok{background:#e8f4de;color:var(--up)}
+.trade-msg.err{background:#fbeaea;color:var(--down)}
+
+/* ── Portfolio summary ── */
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:600px){.sum-grid{grid-template-columns:repeat(2,1fr)}}
+.sum-cell{background:#f6f3eb;border-radius:10px;padding:11px 12px}
+.sum-cell .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--soft);margin-bottom:3px}
+.sum-cell .val{font-family:var(--mono);font-size:16px;font-weight:700}
+
+/* ── Time control ── */
+.timebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.datedisp{font-family:var(--mono);font-size:15px;font-weight:700;min-width:90px}
+.progwrap{flex:1;min-width:100px}
+.progtrack{height:10px;background:#ece7da;border-radius:5px;overflow:hidden}
+.progfill{height:100%;background:var(--accent);width:0%;transition:width .3s}
+.proglbl{font-size:11px;color:var(--soft);margin-top:3px;font-family:var(--mono)}
+.tcontrols{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ibtn{border:1px solid var(--line);background:#fff;border-radius:8px;min-width:48px;min-height:48px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.ibtn:active{background:var(--accent-bg)}
+.ibtn.play{background:var(--accent);color:#fff;border-color:var(--accent);padding:0 18px;font-weight:600;font-size:14px;width:auto}
+.spd{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;background:#fff;min-height:48px;appearance:none;-webkit-appearance:none}
+
+/* ── Positions table ── */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:380px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--soft);font-weight:600}
+td.r,th.r{text-align:right;font-family:var(--mono)}
+tr:last-child td{border-bottom:none}
+.close-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 10px;font-size:12px;cursor:pointer;min-height:36px;touch-action:manipulation}
+.close-btn:active{border-color:var(--down);color:var(--down)}
+.empty{color:var(--soft);font-size:13px;font-style:italic;padding:6px 0}
+
+/* ── Log ── */
+.loglist{max-height:160px;overflow-y:auto;-webkit-overflow-scrolling:touch;font-size:12px;font-family:var(--mono)}
+.logentry{padding:5px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+.logentry:last-child{border-bottom:none}
+.logdate{color:var(--soft);flex-shrink:0}
+
+/* ── Correlation info ── */
+.corr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(max-width:500px){.corr-grid{grid-template-columns:1fr 1fr}}
+.corr-card{background:#f6f3eb;border-radius:8px;padding:10px;font-size:12px}
+.corr-card .pair{font-weight:700;margin-bottom:2px}
+.corr-card .val{font-family:var(--mono);font-size:15px;font-weight:700}
+
+/* ── End screen ── */
+.end-banner{background:var(--accent-bg);border:1px solid var(--accent);border-radius:12px;padding:16px;margin-bottom:14px}
+.end-banner h3{margin:0 0 6px;font-family:var(--serif)}
+
+@supports (-webkit-touch-callout:none){
+  select,input{font-size:16px!important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <h1>Börsenspiel – Portfolioallokation</h1>
+  <div class="sub" id="header-sub">Setup</div>
+</header>
+
+<!-- SETUP -->
+<div id="setup-screen">
+  <div class="panel">
+    <h2>Spiel einrichten</h2>
+    <div class="setup-grid">
+      <div>
+        <div class="field"><label>Dein Name</label><input type="text" id="p-name" placeholder="z. B. Anna K." /></div>
+        <div class="field"><label>Startkapital (€)</label><input type="number" id="p-capital" value="10000" min="100" step="500" /></div>
+      </div>
+      <div style="background:#f6f3eb;border-radius:10px;padding:14px;font-size:13px">
+        <strong>Wie das Spiel funktioniert:</strong>
+        <ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;color:var(--soft)">
+          <li>6 Jahre Kursgeschichte sind bekannt</li>
+          <li>4 Jahre werden Monat für Monat simuliert</li>
+          <li>Analysiere zuerst die historischen Verläufe und Korrelationen</li>
+          <li>Stelle dein Portfolio zusammen – Ziel: geringe Volatilität</li>
+          <li>Kaufe und verkaufe Aktien während der Simulation</li>
+        </ul>
+      </div>
+    </div>
+    <button class="btn" id="setup-start-btn">Spiel starten</button>
+    <div class="err" id="setup-err"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game-screen" class="hidden">
+
+  <div id="end-banner" class="end-banner hidden">
+    <h3>Simulation beendet!</h3>
+    <p id="end-text"></p>
+  </div>
+
+  <!-- Zeit -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0;border:none;padding:0">Zeitsteuerung</h2>
+      <span class="phase-badge" id="phase-badge">–</span>
+    </div>
+    <div class="timebar">
+      <div class="datedisp" id="date-disp">–</div>
+      <div class="progwrap">
+        <div class="progtrack"><div class="progfill" id="prog-fill"></div></div>
+        <div class="proglbl" id="prog-lbl">–</div>
+      </div>
+      <div class="tcontrols">
+        <button class="ibtn" id="btn-back">«</button>
+        <button class="ibtn play" id="btn-play">▶ Start</button>
+        <button class="ibtn" id="btn-fwd">»</button>
+        <select class="spd" id="spd-sel">
+          <option value="1500">Langsam (1,5 s/Monat)</option>
+          <option value="600" selected>Normal (0,6 s)</option>
+          <option value="200">Schnell (0,2 s)</option>
+          <option value="60">Sehr schnell (60 ms)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Portfolio-Summary -->
+  <div class="panel">
+    <h2>Depot</h2>
+    <div class="sum-grid">
+      <div class="sum-cell"><div class="lbl">Gesamtwert</div><div class="val" id="s-total">–</div></div>
+      <div class="sum-cell"><div class="lbl">Barvermögen</div><div class="val" id="s-cash">–</div></div>
+      <div class="sum-cell"><div class="lbl">Rendite</div><div class="val" id="s-ret">–</div></div>
+      <div class="sum-cell"><div class="lbl">Depot-Vola (ann.)</div><div class="val" id="s-vola">–</div></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <h2 style="margin:0;border:none;padding:0">Charts</h2>
+      <div class="chart-tabs">
+        <button class="ctab active" id="ctab-kurs">Kursverlauf</button>
+        <button class="ctab" id="ctab-portfolio">Mein Portfolio</button>
+      </div>
+    </div>
+
+    <!-- Gewichtungs-Panel (nur im Kurs-Tab) -->
+    <div id="weight-panel">
+      <div class="weight-hint">Gib Gewichtungen ein (beliebige Zahlen, z. B. 1 : 2 : 1 : 0.5 : 1) um ein gewichtetes Portfolio im Chart zu sehen:</div>
+      <div class="weight-row" id="weight-inputs"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <span class="sum-display" id="weight-sum"></span>
+        <button class="btn sm ghost" id="weight-reset">Zurücksetzen</button>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="chart-kurs"></canvas>
+      <canvas id="chart-pf" style="display:none"></canvas>
+    </div>
+    <div class="legend-row" id="legend-row"></div>
+  </div>
+
+  <!-- Aktien + Handeln -->
+  <div class="panel">
+    <h2>Aktien handeln</h2>
+    <div class="stocks-grid" id="stocks-grid"></div>
+    <div class="trade-area" id="trade-area" style="margin-top:14px">
+      <div class="trade-box">
+        <h3>Kaufen</h3>
+        <div class="field" style="margin-bottom:8px"><label>Aktie</label><select id="t-ticker-buy"></select></div>
+        <div class="qty-row">
+          <input type="number" id="t-qty-buy" min="1" step="1" value="10" />
+          <span style="font-size:13px;color:var(--soft)">Stück</span>
+        </div>
+        <div class="trade-preview" id="t-prev-buy">–</div>
+        <button class="btn" id="t-buy-btn" style="width:100%">Kaufen</button>
+        <div class="trade-msg hidden" id="t-buy-msg"></div>
+      </div>
+      <div class="trade-box">
+        <h3>Verkaufen</h3>
+        <div class="field" style="margin-bottom:8px"><label>Aktie</label><select id="t-ticker-sell"></select></div>
+        <div class="qty-row">
+          <input type="number" id="t-qty-sell" min="1" step="1" value="10" />
+          <span style="font-size:13px;color:var(--soft)">Stück</span>
+        </div>
+        <div class="trade-preview" id="t-prev-sell">–</div>
+        <button class="btn" id="t-sell-btn" style="width:100%">Verkaufen</button>
+        <div class="trade-msg hidden" id="t-sell-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Positionen -->
+  <div class="panel">
+    <h2>Meine Positionen</h2>
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>Aktie</th><th class="r">Stück</th><th class="r">Ø Kauf</th><th class="r">Kurs</th><th class="r">Wert</th><th class="r">G/V</th><th></th></tr></thead>
+        <tbody id="pos-body"></tbody>
+      </table>
+    </div>
+    <div class="empty hidden" id="pos-empty">Noch keine Positionen.</div>
+  </div>
+
+  <!-- Korrelationen -->
+  <div class="panel">
+    <h2>Korrelationen (bekannte Periode)</h2>
+    <div class="corr-grid" id="corr-grid"></div>
+    <p style="font-size:12px;color:var(--soft);margin:10px 0 0">
+      Werte nahe +1 = gleichläufig · Werte nahe −1 = gegenläufig · 0 = unabhängig.<br>
+      Tipp: Ein Portfolio aus anti-korrelierten Aktien hat weniger Gesamtvolatilität.
+    </p>
+  </div>
+
+  <!-- Log -->
+  <div class="panel">
+    <h2>Transaktionen</h2>
+    <div class="loglist" id="log-list"></div>
+  </div>
+
+  <button class="btn ghost sm" id="reset-btn" style="margin-top:4px">Neues Spiel</button>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+document.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation()});
+document.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation()});
+
+// ═══════════════════════════════════════════════════════════
+// EINGEBETTETE DATEN
+// ═══════════════════════════════════════════════════════════
+const RAW = {"NovaTech":{"months":["2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"close":[113.29,112.22,112.04,94.39,95.42,98.47,108.01,93.96,87.95,88.73,74.29,94.64,102.9,106.13,113.91,107.08,107.77,129.8,133.96,123.1,114.46,112.54,127.76,125.63,162.22,179.21,173.28,167.53,179.07,206.17,215.21,245.37,239.52,282.45,311.86,351.81,368.17,352.3,326.93,311.32,337.65,337.38,376.7,428.89,366.97,331.96,354.79,359.88,345.57,265.35,240.52,307.81,368.08,335.57,354.42,338.25,357.18,398.32,394.46,353.8,287.08,336.0,335.93,345.51,346.98,369.14,334.21,325.71,301.08,240.16,219.45,207.73,219.36,232.67,268.33,287.64,280.85,314.43,312.19,316.69,308.26,304.1,325.8,292.71,292.88,317.84,337.58,355.59,362.83,378.49,350.04,341.57,349.15,362.07,374.83,373.21,365.72,374.21,332.36,364.4,382.58,434.84,498.54,471.89,469.46,489.25,537.15,636.89,593.16,646.4,643.48,629.79,601.15,641.05,649.56,609.55,633.86,684.52,578.57,565.79]},"GlobalNet":{"months":["2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"close":[118.04,108.88,110.72,97.56,105.85,103.24,114.41,102.56,92.24,89.59,73.76,94.07,98.28,103.45,113.72,93.25,97.37,105.34,105.03,98.79,89.73,88.17,93.25,93.73,110.87,124.51,109.28,102.98,113.39,128.6,132.47,149.49,125.7,140.61,153.08,166.05,180.11,171.61,161.06,144.22,146.66,137.38,139.1,168.52,151.25,144.7,149.41,144.42,129.87,104.09,86.45,108.15,115.14,112.21,116.92,120.15,127.82,137.17,124.04,111.51,89.55,95.42,97.45,108.41,111.06,112.56,111.6,107.73,106.48,85.19,83.97,78.57,73.13,74.9,78.47,80.65,79.34,89.14,88.21,89.07,85.8,87.32,94.23,82.23,92.38,99.13,108.34,114.28,115.05,112.46,105.81,111.89,117.67,133.28,135.41,136.59,134.74,154.78,135.52,154.78,158.44,176.56,210.77,213.61,241.37,263.67,312.36,362.28,365.45,402.44,415.53,409.14,393.02,441.07,435.01,397.52,405.51,454.4,396.39,416.26]},"HausGold":{"months":["2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"close":[96.84,98.75,99.04,102.05,104.1,101.67,102.25,104.26,105.87,107.61,117.72,122.35,125.13,124.48,126.81,127.17,120.93,117.0,115.44,113.47,112.9,109.89,114.41,115.85,119.81,117.83,116.64,115.56,114.17,109.05,111.74,108.68,103.58,111.25,107.51,110.11,112.11,113.25,110.7,113.17,114.73,118.05,115.65,116.41,113.77,117.27,112.28,112.47,112.25,100.97,97.38,96.99,101.93,100.57,96.42,95.71,99.26,99.47,102.61,99.46,98.77,95.63,95.21,96.19,97.81,101.26,103.36,102.42,103.31,102.67,102.94,102.44,99.06,102.44,108.02,106.97,105.93,105.72,104.93,105.37,109.75,105.71,101.64,102.33,104.33,108.58,112.1,111.1,111.57,115.61,114.84,112.99,117.45,120.73,121.04,124.78,123.25,122.89,116.43,122.91,124.14,125.72,126.39,127.85,134.95,133.56,133.61,139.27,143.4,145.79,142.54,146.65,143.48,146.68,145.15,139.83,139.81,134.92,133.1,130.75]},"EnerCorp":{"months":["2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"close":[95.76,98.24,95.68,97.56,107.72,104.8,114.8,109.45,108.74,104.15,103.14,111.79,116.54,120.38,125.61,135.87,140.51,130.46,128.98,120.13,115.16,118.14,118.03,109.89,123.01,120.59,109.53,99.71,98.07,100.71,101.87,102.91,110.42,113.1,108.14,110.32,119.99,116.78,121.39,111.91,109.61,113.06,106.67,103.45,102.39,108.59,109.85,107.27,115.9,95.57,83.55,94.03,91.46,97.29,100.56,100.32,97.93,103.69,103.99,99.47,92.59,101.43,98.08,108.09,113.86,116.31,119.66,123.47,118.09,105.76,108.96,110.66,120.84,138.02,167.94,177.94,196.6,185.62,188.29,170.97,176.77,176.86,202.66,191.87,175.09,198.19,189.91,175.39,173.72,184.15,174.77,173.47,154.72,175.34,171.5,169.34,173.63,175.32,163.24,163.06,160.09,167.14,189.88,191.32,195.12,200.03,210.2,219.69,227.02,221.96,233.73,239.87,236.56,289.57,303.14,297.96,295.85,271.19,278.74,264.18]},"SafeBond":{"months":["2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"close":[92.38,93.03,95.56,95.79,99.51,94.68,95.03,98.02,101.99,100.02,110.01,110.17,111.5,114.04,110.16,108.5,109.67,108.28,106.55,108.22,110.81,108.62,105.0,106.07,106.54,104.28,111.34,109.88,107.69,110.52,114.37,114.37,113.75,120.06,118.16,115.27,121.88,125.43,123.97,124.29,129.23,132.11,127.09,124.65,129.06,133.85,135.98,140.11,143.39,150.09,160.66,156.62,150.89,158.48,153.71,160.17,155.49,153.42,156.94,157.8,163.79,160.96,164.57,161.01,165.19,172.36,173.64,176.89,169.79,177.55,185.48,185.91,178.29,166.63,166.52,174.62,170.27,167.06,165.33,174.15,177.93,174.22,180.59,180.03,181.46,186.32,181.09,176.97,174.59,186.68,186.76,177.29,178.84,180.57,183.75,180.26,178.59,169.49,163.27,168.7,167.97,169.35,175.32,180.06,176.77,172.39,165.27,166.03,173.83,173.17,176.69,176.71,180.64,180.82,180.42,172.18,165.18,155.87,158.6,156.22]}};
+const KNOWN = 72;   // 6 Jahre = 72 Monate bekannt
+const TICKERS = Object.keys(RAW);
+const MONTHS  = RAW[TICKERS[0]].months; // 120 Einträge
+
+// Aktien-Beschreibungen
+const DESCS = {
+  NovaTech:  "Technologiekonzern · hohe Vola · hohes Wachstumspotenzial",
+  GlobalNet: "Digitale Plattformen · hohe Vola · stark mit NovaTech korreliert",
+  HausGold:  "Konsumgüter defensiv · geringe Vola · stabiles Wachstum",
+  EnerCorp:  "Energie & Rohstoffe · mittlere Vola · zyklisch, kaum korreliert",
+  SafeBond:  "Staatsanleihen-ETF · sehr geringe Vola · anti-korreliert zu Tech",
+};
+
+const COLORS = {
+  NovaTech: "#e05c2a",
+  GlobalNet:  "#2a7ae0",
+  HausGold:   "#3b9e44",
+  EnerCorp: "#b07d1a",
+  SafeBond:   "#8a3db5",
+};
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const S = {
+  name: "",
+  startCapital: 10000,
+  cash: 0,
+  cursor: KNOWN - 1,  // startet am letzten bekannten Monat
+  positions: {},      // ticker -> {qty, avgPrice}
+  portfolioHistory: [],  // [{month, value}] ab cursor=KNOWN-1
+  log: [],
+  weights: {},        // ticker -> number
+  playing: false,
+  timer: null,
+  speedMs: 600,
+  activeChart: 'kurs',
+  ended: false,
+};
+TICKERS.forEach(t => { S.weights[t] = 1; S.positions[t] = {qty:0, avgPrice:0}; });
+
+// ═══════════════════════════════════════════════════════════
+// FORMATTING
+// ═══════════════════════════════════════════════════════════
+const fmt$ = v => v.toLocaleString("de-DE",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtN = (v,d=2) => v.toLocaleString("de-DE",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtP = v => (v>=0?"+":"")+fmtN(v,1)+" %";
+const fmtM = m => { const [y,mo]=m.split("-"); return `${mo}/${y}`; };
+
+function getPrice(ticker, idx=S.cursor) {
+  return RAW[ticker].close[Math.max(0,Math.min(idx, MONTHS.length-1))];
+}
+
+// ═══════════════════════════════════════════════════════════
+// KORRELATIONSMATRIX (bekannte Periode)
+// ═══════════════════════════════════════════════════════════
+function computeCorr(t1, t2) {
+  const r1=[], r2=[];
+  for(let i=1;i<KNOWN;i++){
+    r1.push(Math.log(RAW[t1].close[i]/RAW[t1].close[i-1]));
+    r2.push(Math.log(RAW[t2].close[i]/RAW[t2].close[i-1]));
+  }
+  const m1=r1.reduce((a,b)=>a+b)/r1.length;
+  const m2=r2.reduce((a,b)=>a+b)/r2.length;
+  const cov=r1.reduce((s,v,i)=>s+(v-m1)*(r2[i]-m2),0)/r1.length;
+  const s1=Math.sqrt(r1.reduce((s,v)=>s+(v-m1)**2,0)/r1.length);
+  const s2=Math.sqrt(r2.reduce((s,v)=>s+(v-m2)**2,0)/r2.length);
+  return s1*s2>0 ? cov/(s1*s2) : 0;
+}
+
+function computePortfolioVola() {
+  // Monatliche Renditen des aktuellen Depots (ab Simulationsstart bis cursor)
+  if(S.portfolioHistory.length < 3) return null;
+  const hist = S.portfolioHistory;
+  const rets = [];
+  for(let i=1;i<hist.length;i++){
+    if(hist[i-1].value>0) rets.push(Math.log(hist[i].value/hist[i-1].value));
+  }
+  if(rets.length < 2) return null;
+  const mean = rets.reduce((a,b)=>a+b)/rets.length;
+  const vola = Math.sqrt(rets.reduce((s,r)=>s+(r-mean)**2,0)/rets.length) * Math.sqrt(12) * 100;
+  return vola;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════
+let chartKurs = null, chartPF = null;
+
+function initCharts() {
+  const baseOpts = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false}, tooltip:{
+      callbacks:{label: item => `${item.dataset.label}: ${fmtN(item.raw,2)}`}
+    }},
+    scales:{
+      x:{ticks:{maxTicksLimit:10,font:{size:10}}},
+      y:{ticks:{font:{size:10}}}
+    }
+  };
+
+  chartKurs = new Chart(document.getElementById("chart-kurs").getContext("2d"),{
+    type:"line", data:{labels:[], datasets:[]}, options:{...baseOpts,
+      plugins:{...baseOpts.plugins, tooltip:{callbacks:{
+        label: item => `${item.dataset.label}: ${fmtN(item.raw,2)}`
+      }}}
+    }
+  });
+
+  chartPF = new Chart(document.getElementById("chart-pf").getContext("2d"),{
+    type:"line",
+    data:{labels:[],datasets:[
+      {label:"Depotwert",data:[],borderColor:COLORS.NovaTech,
+       backgroundColor:"rgba(224,92,42,0.08)",fill:true,tension:0.2,pointRadius:2,borderWidth:2},
+      {label:"Startkapital",data:[],borderColor:"#aaa",borderDash:[5,4],
+       fill:false,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{...baseOpts,
+      plugins:{...baseOpts.plugins,legend:{display:true,position:"top",labels:{font:{size:11},boxWidth:16}}},
+      scales:{...baseOpts.scales,y:{ticks:{font:{size:10},
+        callback:v=>v.toLocaleString("de-DE",{maximumFractionDigits:0})+" €"}}}
+    }
+  });
+
+  // Tab-Buttons
+  document.getElementById("ctab-kurs").addEventListener("click",()=>{
+    S.activeChart="kurs";
+    document.getElementById("ctab-kurs").classList.add("active");
+    document.getElementById("ctab-portfolio").classList.remove("active");
+    document.getElementById("chart-kurs").style.display="block";
+    document.getElementById("chart-pf").style.display="none";
+    document.getElementById("weight-panel").style.display="";
+    updateLegend();
+    updateChartKurs();
+  });
+  document.getElementById("ctab-portfolio").addEventListener("click",()=>{
+    S.activeChart="portfolio";
+    document.getElementById("ctab-portfolio").classList.add("active");
+    document.getElementById("ctab-kurs").classList.remove("active");
+    document.getElementById("chart-kurs").style.display="none";
+    document.getElementById("chart-pf").style.display="block";
+    document.getElementById("weight-panel").style.display="none";
+    updateLegend();
+    updateChartPF();
+  });
+}
+
+function updateChartKurs() {
+  if(!chartKurs) return;
+  const upto = S.cursor;
+  const labels = MONTHS.slice(0,upto+1).map(fmtM);
+  chartKurs.data.labels = labels;
+
+  // Ein Dataset pro Ticker (historisch grau, aktiv farbig)
+  // + ein Dataset für das gewichtete Portfolio
+  const datasets = [];
+
+  TICKERS.forEach(t => {
+    // Historisch (bis KNOWN-1, grau)
+    const histData = new Array(upto+1).fill(null);
+    for(let i=0;i<Math.min(KNOWN,upto+1);i++) histData[i]=RAW[t].close[i];
+    datasets.push({
+      label: t+" (hist.)",
+      data: histData,
+      borderColor: COLORS[t]+"55",
+      backgroundColor:"transparent",
+      fill:false, tension:0.2, pointRadius:0, borderWidth:1.5,
+      borderDash:[3,3], order:3
+    });
+
+    // Aktiv (ab KNOWN)
+    if(upto >= KNOWN) {
+      const actData = new Array(upto+1).fill(null);
+      actData[KNOWN-1] = RAW[t].close[KNOWN-1]; // Verbindungspunkt
+      for(let i=KNOWN;i<=upto;i++) actData[i]=RAW[t].close[i];
+      datasets.push({
+        label: t,
+        data: actData,
+        borderColor: COLORS[t],
+        backgroundColor:"transparent",
+        fill:false, tension:0.2, pointRadius:0, borderWidth:2.5, order:2
+      });
+    }
+  });
+
+  // Gewichtetes Portfolio
+  const totalW = TICKERS.reduce((s,t)=>s+(S.weights[t]||0),0);
+  if(totalW > 0) {
+    const pfData = new Array(upto+1).fill(null);
+    for(let i=0;i<=upto;i++){
+      // Normiertes Portfolio: Anfangswert = 100 (Anfang der Daten)
+      const base = TICKERS.reduce((s,t)=>s+(S.weights[t]||0)*RAW[t].close[0],0)/totalW;
+      const cur  = TICKERS.reduce((s,t)=>s+(S.weights[t]||0)*RAW[t].close[i],0)/totalW;
+      pfData[i] = Math.round(100 * cur / base * 100) / 100;
+    }
+    datasets.push({
+      label: "Portfolio (gewichtet)",
+      data: pfData,
+      borderColor: "#111",
+      backgroundColor:"rgba(0,0,0,0.04)",
+      fill:false, tension:0.2, pointRadius:0, borderWidth:3,
+      borderDash:[4,2], order:1
+    });
+  }
+
+  chartKurs.data.datasets = datasets;
+  chartKurs.update();
+}
+
+function updateChartPF() {
+  if(!chartPF || S.portfolioHistory.length===0) return;
+  const h = S.portfolioHistory;
+  chartPF.data.labels = h.map(e=>fmtM(e.month));
+  chartPF.data.datasets[0].data = h.map(e=>e.value);
+  chartPF.data.datasets[1].data = h.map(()=>S.startCapital);
+  chartPF.update();
+}
+
+function updateLegend() {
+  const row = document.getElementById("legend-row");
+  row.innerHTML = "";
+  if(S.activeChart === "kurs") {
+    TICKERS.forEach(t => {
+      const el = document.createElement("div");
+      el.className = "legend-item";
+      el.innerHTML = `<div class="legend-dot" style="background:${COLORS[t]}"></div><span>${t}</span>`;
+      row.appendChild(el);
+    });
+    const el = document.createElement("div");
+    el.className = "legend-item";
+    el.innerHTML = `<div class="legend-dot" style="background:#111;opacity:.6"></div><span>Portfolio (gewichtet)</span>`;
+    row.appendChild(el);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEIGHT INPUTS
+// ═══════════════════════════════════════════════════════════
+function initWeightInputs() {
+  const row = document.getElementById("weight-inputs");
+  row.innerHTML = "";
+  TICKERS.forEach(t => {
+    const cell = document.createElement("div");
+    cell.className = "w-cell";
+    cell.innerHTML = `<label style="color:${COLORS[t]}">${t}</label>
+      <input type="number" id="w-${t}" min="0" step="0.1" value="${S.weights[t]}" />`;
+    row.appendChild(cell);
+    cell.querySelector("input").addEventListener("input", e => {
+      S.weights[t] = Math.max(0, parseFloat(e.target.value)||0);
+      updateWeightSum();
+      if(S.activeChart==="kurs") updateChartKurs();
+    });
+  });
+  updateWeightSum();
+
+  document.getElementById("weight-reset").addEventListener("click",()=>{
+    TICKERS.forEach(t=>{ S.weights[t]=1; document.getElementById("w-"+t).value=1; });
+    updateWeightSum();
+    if(S.activeChart==="kurs") updateChartKurs();
+  });
+}
+
+function updateWeightSum() {
+  const total = TICKERS.reduce((s,t)=>s+(S.weights[t]||0),0);
+  const parts = TICKERS.map(t=>{
+    const pct = total>0?((S.weights[t]||0)/total*100):0;
+    return `${t}: ${fmtN(pct,1)}%`;
+  });
+  document.getElementById("weight-sum").textContent = parts.join(" · ");
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════════════════
+document.getElementById("setup-start-btn").addEventListener("click",()=>{
+  const name = document.getElementById("p-name").value.trim();
+  const cap = parseFloat(document.getElementById("p-capital").value)||10000;
+  if(!name){document.getElementById("setup-err").textContent="Bitte einen Namen eingeben.";return;}
+  S.name = name;
+  S.startCapital = Math.max(100,cap);
+  S.cash = S.startCapital;
+  S.cursor = 0;
+  S.portfolioHistory = [{month: MONTHS[0], value: S.startCapital}];
+  document.getElementById("setup-screen").classList.add("hidden");
+  document.getElementById("game-screen").classList.remove("hidden");
+  document.getElementById("header-sub").textContent = name;
+  initGame();
+  addLog("Spiel gestartet · Startkapital: "+fmt$(S.startCapital));
+  renderAll();
+});
+
+// ═══════════════════════════════════════════════════════════
+// GAME INIT
+// ═══════════════════════════════════════════════════════════
+function initGame() {
+  initCharts();
+  initWeightInputs();
+  initTradePanel();
+  initTimeControls();
+  renderCorrGrid();
+  TICKERS.forEach(t=>S.positions[t]={qty:0,avgPrice:0});
+}
+
+// ═══════════════════════════════════════════════════════════
+// TIME CONTROLS
+// ═══════════════════════════════════════════════════════════
+function initTimeControls() {
+  document.getElementById("btn-fwd").addEventListener("click",()=>step(1));
+  document.getElementById("btn-back").addEventListener("click",()=>step(-1));
+  document.getElementById("btn-play").addEventListener("click",togglePlay);
+  document.getElementById("spd-sel").addEventListener("change",e=>{
+    S.speedMs=parseInt(e.target.value);
+    if(S.playing){stopTimer();startTimer();}
+  });
+  document.getElementById("reset-btn").addEventListener("click",()=>{
+    if(confirm("Neues Spiel? Fortschritt geht verloren.")) location.reload();
+  });
+}
+
+function togglePlay(){
+  if(S.ended) return;
+  S.playing=!S.playing;
+  const b=document.getElementById("btn-play");
+  if(S.playing){b.textContent="⏸ Pause";startTimer();}
+  else{b.textContent="▶ Weiter";stopTimer();}
+}
+const startTimer=()=>{S.timer=setInterval(()=>step(1),S.speedMs)};
+const stopTimer=()=>{clearInterval(S.timer);S.timer=null};
+
+function step(delta) {
+  const next = S.cursor + delta;
+  if(next < 0) return;
+  if(next >= MONTHS.length){ endGame(); return; }
+  S.cursor = next;
+  const val = computeTotal();
+  S.portfolioHistory.push({month: MONTHS[S.cursor], value: val});
+  renderAll();
+}
+
+function endGame() {
+  S.cursor = MONTHS.length-1;
+  S.ended = true;
+  stopTimer();
+  S.playing = false;
+  document.getElementById("btn-play").textContent="▶ Beendet";
+  document.getElementById("btn-play").disabled=true;
+  const total = computeTotal();
+  const ret = (total/S.startCapital-1)*100;
+  const vola = computePortfolioVola();
+  document.getElementById("end-banner").classList.remove("hidden");
+  document.getElementById("end-text").innerHTML=
+    `Endwert: <strong>${fmt$(total)}</strong> · Rendite: <strong>${fmtP(ret)}</strong>` +
+    (vola!==null ? ` · Portfolio-Vola: <strong>${fmtN(vola,1)} %</strong>` : "");
+  addLog("Simulation beendet · "+fmt$(total)+" · "+fmtP(ret));
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRADE PANEL
+// ═══════════════════════════════════════════════════════════
+function initTradePanel() {
+  ["t-ticker-buy","t-ticker-sell"].forEach(id=>{
+    const sel=document.getElementById(id); sel.innerHTML="";
+    TICKERS.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;sel.appendChild(o);});
+  });
+  ["t-qty-buy","t-ticker-buy"].forEach(id=>document.getElementById(id).addEventListener("input",updateBuyPreview));
+  ["t-qty-sell","t-ticker-sell"].forEach(id=>document.getElementById(id).addEventListener("input",updateSellPreview));
+  document.getElementById("t-buy-btn").addEventListener("click",doBuy);
+  document.getElementById("t-sell-btn").addEventListener("click",doSell);
+  updateBuyPreview(); updateSellPreview();
+}
+
+function updateBuyPreview(){
+  const t=document.getElementById("t-ticker-buy").value;
+  const qty=parseInt(document.getElementById("t-qty-buy").value)||0;
+  const price=getPrice(t);
+  document.getElementById("t-prev-buy").textContent=
+    `Kurs: ${fmtN(price)} · Kosten: ${fmt$(price*qty)}`;
+}
+function updateSellPreview(){
+  const t=document.getElementById("t-ticker-sell").value;
+  const qty=parseInt(document.getElementById("t-qty-sell").value)||0;
+  const price=getPrice(t);
+  const held=(S.positions[t]||{qty:0}).qty;
+  document.getElementById("t-prev-sell").textContent=
+    `Kurs: ${fmtN(price)} · Erlös: ${fmt$(price*qty)} · Im Depot: ${held}`;
+}
+
+function showMsg(id,text,type){
+  const el=document.getElementById(id);
+  el.textContent=text; el.className="trade-msg "+type; el.classList.remove("hidden");
+  setTimeout(()=>el.classList.add("hidden"),3500);
+}
+
+function doBuy(){
+  
+  const t=document.getElementById("t-ticker-buy").value;
+  const qty=parseInt(document.getElementById("t-qty-buy").value)||0;
+  if(qty<=0){showMsg("t-buy-msg","Ungültige Anzahl.","err");return;}
+  const price=getPrice(t), cost=price*qty;
+  if(cost>S.cash){showMsg("t-buy-msg","Nicht genug Geld.","err");return;}
+  S.cash-=cost;
+  const pos=S.positions[t];
+  const newQty=pos.qty+qty;
+  pos.avgPrice=(pos.avgPrice*pos.qty+price*qty)/newQty;
+  pos.qty=newQty;
+  addLog(`Kauf: ${qty}×${t} zu ${fmtN(price)} = ${fmt$(cost)}`);
+  showMsg("t-buy-msg",`${qty}×${t} gekauft für ${fmt$(cost)}`,"ok");
+  renderAll();
+}
+
+function doSell(){
+  
+  const t=document.getElementById("t-ticker-sell").value;
+  const qty=parseInt(document.getElementById("t-qty-sell").value)||0;
+  const pos=S.positions[t];
+  if(qty<=0){showMsg("t-sell-msg","Ungültige Anzahl.","err");return;}
+  if(!pos||pos.qty<qty){showMsg("t-sell-msg","Nicht genug Stück im Depot.","err");return;}
+  const price=getPrice(t), proceeds=price*qty;
+  S.cash+=proceeds; pos.qty-=qty;
+  addLog(`Verkauf: ${qty}×${t} zu ${fmtN(price)} = ${fmt$(proceeds)}`);
+  showMsg("t-sell-msg",`${qty}×${t} verkauft für ${fmt$(proceeds)}`,"ok");
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+// KORRELATIONS-GRID
+// ═══════════════════════════════════════════════════════════
+function renderCorrGrid() {
+  const grid = document.getElementById("corr-grid");
+  grid.innerHTML = "";
+  const pairs = [];
+  for(let i=0;i<TICKERS.length;i++)
+    for(let j=i+1;j<TICKERS.length;j++)
+      pairs.push([TICKERS[i],TICKERS[j]]);
+
+  pairs.forEach(([t1,t2])=>{
+    const c = computeCorr(t1,t2);
+    const col = c>0.5?"#2d6b0e":c<-0.3?"#9b2828":"#5a6057";
+    const label = c>0.5?"stark positiv":c>0.2?"moderat positiv":c<-0.3?"anti-korreliert":"schwach";
+    const card=document.createElement("div");
+    card.className="corr-card";
+    card.innerHTML=`<div class="pair">${t1} ↔ ${t2}</div>
+      <div class="val" style="color:${col}">${fmtN(c,2)}</div>
+      <div style="font-size:11px;color:var(--soft)">${label}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPUTE
+// ═══════════════════════════════════════════════════════════
+function computeTotal(){
+  let total=S.cash;
+  TICKERS.forEach(t=>total+=getPrice(t)*S.positions[t].qty);
+  return total;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════
+function addLog(text){
+  S.log.unshift({m:MONTHS[S.cursor],text});
+  if(S.log.length>200) S.log.pop();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+function renderAll(){
+  const m=MONTHS[S.cursor];
+  document.getElementById("date-disp").textContent=fmtM(m);
+  const isHist=S.cursor<KNOWN;
+  const badge=document.getElementById("phase-badge");
+  badge.textContent=isHist?"Bekannte Vergangenheit":"Simulation läuft";
+  badge.className="phase-badge "+(isHist?"phase-hist":"phase-sim");
+
+  const totalDays=MONTHS.length-1;
+  const pct=totalDays>0?(S.cursor/totalDays)*100:0;
+  document.getElementById("prog-fill").style.width=pct+"%";
+  const simCursor=Math.max(0,S.cursor-(KNOWN-1));
+  const simDays=MONTHS.length-KNOWN;
+  document.getElementById("prog-lbl").textContent=
+    S.cursor<KNOWN
+      ? `Vorgeschichte: Monat ${S.cursor+1} / ${KNOWN}`
+      : `Simulationsmonat ${simCursor} / ${simDays}`;
+
+  const total=computeTotal();
+  const ret=(total/S.startCapital-1)*100;
+  document.getElementById("s-total").textContent=fmt$(total);
+  document.getElementById("s-cash").textContent=fmt$(S.cash);
+  const retEl=document.getElementById("s-ret");
+  retEl.textContent=fmtP(ret); retEl.className="val "+(ret>=0?"up":"down");
+  const vola=computePortfolioVola();
+  document.getElementById("s-vola").textContent=vola!==null?fmtN(vola,1)+" %":"–";
+
+  renderStockCards();
+  renderPositions();
+  renderLog();
+  updateBuyPreview(); updateSellPreview();
+  if(S.activeChart==="kurs") updateChartKurs(); else updateChartPF();
+}
+
+function renderStockCards(){
+  const grid=document.getElementById("stocks-grid");
+  grid.innerHTML="";
+  TICKERS.forEach(t=>{
+    const price=getPrice(t);
+    const prev=S.cursor>0?getPrice(t,S.cursor-1):price;
+    const chg=(price/prev-1)*100;
+    const card=document.createElement("div");
+    card.className="stock-card"+(S.positions[t].qty>0?" selected":"");
+    card.style.borderTopColor=COLORS[t];
+    card.style.borderTopWidth="3px";
+    card.innerHTML=`
+      <div class="sname" style="color:${COLORS[t]}">${t}</div>
+      <div class="sprice">${fmtN(price,2)}</div>
+      <div class="schange ${chg>=0?"up":"down"}">${fmtP(chg)}</div>
+      <div class="sdesc">${DESCS[t]||""}</div>
+      ${S.positions[t].qty>0?`<div style="font-size:11px;margin-top:4px;font-family:var(--mono);color:var(--soft)">${S.positions[t].qty} Stück</div>`:""}
+    `;
+    // Klick: Aktie in Trade-Selects setzen
+    card.addEventListener("click",()=>{
+      document.getElementById("t-ticker-buy").value=t;
+      document.getElementById("t-ticker-sell").value=t;
+      updateBuyPreview(); updateSellPreview();
+    });
+    grid.appendChild(card);
+  });
+}
+
+function renderPositions(){
+  const tbody=document.getElementById("pos-body");
+  const empty=document.getElementById("pos-empty");
+  tbody.innerHTML="";
+  const active=TICKERS.filter(t=>S.positions[t].qty>0);
+  if(!active.length){empty.classList.remove("hidden");return;}
+  empty.classList.add("hidden");
+  active.forEach(t=>{
+    const pos=S.positions[t];
+    const price=getPrice(t);
+    const value=price*pos.qty;
+    const pnl=value-pos.avgPrice*pos.qty;
+    const pct=(pnl/(pos.avgPrice*pos.qty))*100;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td><strong style="color:${COLORS[t]}">${t}</strong></td>
+      <td class="r">${pos.qty}</td>
+      <td class="r">${fmtN(pos.avgPrice)}</td>
+      <td class="r">${fmtN(price)}</td>
+      <td class="r">${fmt$(value)}</td>
+      <td class="r ${pnl>=0?"up":"down"}">${fmt$(pnl)}<br><span style="font-size:11px">${fmtP(pct)}</span></td>
+      <td><button class="close-btn" data-t="${t}">Alles verk.</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll(".close-btn").forEach(btn=>btn.addEventListener("click",()=>{
+    const t=btn.dataset.t, pos=S.positions[t];
+    const price=getPrice(t), proceeds=price*pos.qty;
+    S.cash+=proceeds;
+    addLog(`Verkauf: ${pos.qty}×${t} zu ${fmtN(price)} = ${fmt$(proceeds)}`);
+    pos.qty=0; pos.avgPrice=0;
+    renderAll();
+  }));
+}
+
+function renderLog(){
+  const list=document.getElementById("log-list");
+  if(!S.log.length){list.innerHTML='<div class="empty">Noch keine Transaktionen.</div>';return;}
+  list.innerHTML=S.log.map(e=>`<div class="logentry"><span class="logdate">${fmtM(e.m)}</span><span>${e.text}</span></div>`).join("");
+}
+</script>
+</body>
+</html>
